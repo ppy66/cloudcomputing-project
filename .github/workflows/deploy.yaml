@@ -1,67 +1,44 @@
-# .github/workflows/deploy.yaml
 name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, master ]
   workflow_dispatch:  # 允许手动触发
-
-env:
-  SWR_REGION: ${{ secrets.SWR_REGION }}
-  SWR_ORG: ${{ secrets.SWR_ORG }}
-  IMAGE_NAME: backend
-  IMAGE_TAG: ${{ github.sha }}
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     
     steps:
-    # 1. 检出代码
     - name: Checkout code
       uses: actions/checkout@v4
     
-    # 2. 登录华为云 SWR
     - name: Login to Huawei Cloud SWR
       uses: huaweicloud/swr-login@v1
       with:
-        region: ${{ env.SWR_REGION }}
+        region: cn-north-4
         access-key: ${{ secrets.ACCESS_KEY }}
         secret-key: ${{ secrets.SECRET_KEY }}
     
-    # 3. 构建 Docker 镜像
     - name: Build Docker image
       run: |
-        docker build -t swr.${{ env.SWR_REGION }}.myhuaweicloud.com/${{ env.SWR_ORG }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} ./backend
-        docker tag swr.${{ env.SWR_REGION }}.myhuaweicloud.com/${{ env.SWR_ORG }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} \
-                   swr.${{ env.SWR_REGION }}.myhuaweicloud.com/${{ env.SWR_ORG }}/${{ env.IMAGE_NAME }}:latest
+        docker build -t swr.cn-north-4.myhuaweicloud.com/ppy/backend:${{ github.sha }} ./backend
+        docker tag swr.cn-north-4.myhuaweicloud.com/ppy/backend:${{ github.sha }} swr.cn-north-4.myhuaweicloud.com/ppy/backend:latest
     
-    # 4. 推送到 SWR
     - name: Push to SWR
       run: |
-        docker push swr.${{ env.SWR_REGION }}.myhuaweicloud.com/${{ env.SWR_ORG }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
-        docker push swr.${{ env.SWR_REGION }}.myhuaweicloud.com/${{ env.SWR_ORG }}/${{ env.IMAGE_NAME }}:latest
+        docker push swr.cn-north-4.myhuaweicloud.com/ppy/backend:${{ github.sha }}
+        docker push swr.cn-north-4.myhuaweicloud.com/ppy/backend:latest
     
-    # 5. 配置 kubectl
     - name: Setup kubectl
       uses: azure/setup-kubectl@v4
-      with:
-        version: 'latest'
     
-    # 6. 配置 Kubeconfig
     - name: Configure Kubeconfig
       run: |
         echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > kubeconfig.yaml
-        echo "KUBECONFIG=$(pwd)/kubeconfig.yaml" >> $GITHUB_ENV
+        export KUBECONFIG=$(pwd)/kubeconfig.yaml
     
-    # 7. 更新 Deployment 镜像
     - name: Update Deployment
       run: |
-        kubectl set image deployment/backend backend=swr.${{ env.SWR_REGION }}.myhuaweicloud.com/${{ env.SWR_ORG }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} -n default
+        kubectl set image deployment/backend backend=swr.cn-north-4.myhuaweicloud.com/ppy/backend:${{ github.sha }} -n default
         kubectl rollout status deployment/backend -n default --timeout=120s
-    
-    # 8. 验证部署
-    - name: Verify Deployment
-      run: |
-        kubectl get pods -n default -l app=backend
-        kubectl get svc backend-svc -n default
