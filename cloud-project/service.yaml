@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-svc
+  namespace: default
+  annotations:
+    kubernetes.io/elb.id: a17bc3c6-190d-4c82-8c37-8bb281273499
+    kubernetes.io/elb.class: performance
+spec:
+  type: LoadBalancer
+  selector:
+    app: backend
+  ports:
+  - port: 80
+    targetPort: 5000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-svc
+  namespace: default
+spec:
+  type: ClusterIP
+  selector:
+    app: redis
+  ports:
+  - port: 6379
+    targetPort: 6379
