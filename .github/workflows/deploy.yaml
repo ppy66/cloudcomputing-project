@@ -3,7 +3,12 @@ name: CI/CD Pipeline
 on:
   push:
     branches: [ main, master ]
-  workflow_dispatch:  # 允许手动触发
+  workflow_dispatch:
+
+env:
+  SWR_REGION: cn-north-4
+  SWR_ORG: ppy
+  IMAGE_NAME: backend
 
 jobs:
   build-and-deploy:
@@ -16,19 +21,20 @@ jobs:
     - name: Login to Huawei Cloud SWR
       uses: huaweicloud/swr-login@v1
       with:
-        region: cn-north-4
-        access-key: ${{ secrets.ACCESS_KEY }}
-        secret-key: ${{ secrets.SECRET_KEY }}
+        region: ${{ env.SWR_REGION }}
+        access-key-id: ${{ secrets.ACCESS_KEY }}
+        access-key-secret: ${{ secrets.SECRET_KEY }}
     
     - name: Build Docker image
       run: |
-        docker build -t swr.cn-north-4.myhuaweicloud.com/ppy/backend:${{ github.sha }} ./backend
-        docker tag swr.cn-north-4.myhuaweicloud.com/ppy/backend:${{ github.sha }} swr.cn-north-4.myhuaweicloud.com/ppy/backend:latest
+        docker build -t swr.${{ env.SWR_REGION }}.myhuaweicloud.com/${{ env.SWR_ORG }}/${{ env.IMAGE_NAME }}:${{ github.sha }} ./backend
+        docker tag swr.${{ env.SWR_REGION }}.myhuaweicloud.com/${{ env.SWR_ORG }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
+                   swr.${{ env.SWR_REGION }}.myhuaweicloud.com/${{ env.SWR_ORG }}/${{ env.IMAGE_NAME }}:latest
     
     - name: Push to SWR
       run: |
-        docker push swr.cn-north-4.myhuaweicloud.com/ppy/backend:${{ github.sha }}
-        docker push swr.cn-north-4.myhuaweicloud.com/ppy/backend:latest
+        docker push swr.${{ env.SWR_REGION }}.myhuaweicloud.com/${{ env.SWR_ORG }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+        docker push swr.${{ env.SWR_REGION }}.myhuaweicloud.com/${{ env.SWR_ORG }}/${{ env.IMAGE_NAME }}:latest
     
     - name: Setup kubectl
       uses: azure/setup-kubectl@v4
@@ -36,9 +42,9 @@ jobs:
     - name: Configure Kubeconfig
       run: |
         echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > kubeconfig.yaml
-        export KUBECONFIG=$(pwd)/kubeconfig.yaml
+        echo "KUBECONFIG=$(pwd)/kubeconfig.yaml" >> $GITHUB_ENV
     
     - name: Update Deployment
       run: |
-        kubectl set image deployment/backend backend=swr.cn-north-4.myhuaweicloud.com/ppy/backend:${{ github.sha }} -n default
+        kubectl set image deployment/backend backend=swr.${{ env.SWR_REGION }}.myhuaweicloud.com/${{ env.SWR_ORG }}/${{ env.IMAGE_NAME }}:${{ github.sha }} -n default
         kubectl rollout status deployment/backend -n default --timeout=120s
